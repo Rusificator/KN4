@@ -5,6 +5,7 @@
 #include <thread>
 #include <mutex>
 
+
 #pragma comment(lib, "ws2_32.lib")
 
 #define PORT 8888
@@ -171,6 +172,7 @@ void ClientThread(SOCKET clientSocket) {
 
 int main() {
     setlocale(LC_ALL, "rus");
+
 
     // Инициализация Winsock
     WSADATA wsa;
