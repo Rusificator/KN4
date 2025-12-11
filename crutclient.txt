@@ -1,4 +1,4 @@
-// Добавьте эту строку ПЕРВОЙ в файле!
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <iostream>
@@ -25,7 +25,7 @@ void ReceiveMessages() {
         int bytes = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
         if (bytes > 0) {
             buffer[bytes] = '\0';
-            cout << buffer << endl;
+              cout << endl << buffer << endl;
         }
         else if (bytes == 0) {
             cout << "Сервер отключился" << endl;
@@ -67,11 +67,7 @@ int main() {
 
     send(clientSocket, nickname.c_str(), nickname.length(), 0);
 
-    cout << "\nВы подключились как: " << nickname << endl;
-    cout << "Просто вводите сообщения и нажимайте Enter" << endl;
-    cout << "/private [ник] [сообщение] - личное сообщение" << endl;
-    cout << "/quit - выход" << endl;
-    cout << "==============================" << endl;
+    
 
     thread receiver(ReceiveMessages);
 
