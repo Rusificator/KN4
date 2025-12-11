@@ -1,0 +1,100 @@
+// Добавьте эту строку ПЕРВОЙ в файле!
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+
+#include <iostream>
+#include <winsock2.h>
+#include <string>
+#include <thread>
+
+#pragma comment(lib, "ws2_32.lib")
+
+#define SERVER_IP "127.0.0.1"
+#define PORT 8888
+#define BUFFER_SIZE 1024
+
+using namespace std;
+
+SOCKET clientSocket;
+bool running = true;
+
+void ReceiveMessages() {
+    char buffer[BUFFER_SIZE];
+
+    while (running) {
+        int bytes = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
+        if (bytes > 0) {
+            buffer[bytes] = '\0';
+            cout << buffer << endl;
+        }
+        else if (bytes == 0) {
+            cout << "Сервер отключился" << endl;
+            running = false;
+            break;
+        }
+    }
+}
+
+int main() {
+    setlocale(LC_ALL, "rus");
+
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        cout << "Ошибка Winsock" << endl;
+        return 1;
+    }
+
+    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientSocket == INVALID_SOCKET) {
+        cout << "Ошибка создания сокета" << endl;
+        return 1;
+    }
+
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(PORT);
+    serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    cout << "Подключение к серверу..." << endl;
+    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        cout << "Не удалось подключиться" << endl;
+        return 1;
+    }
+
+    string nickname;
+    cout << "Введите ваш ник: ";
+    getline(cin, nickname);
+
+    send(clientSocket, nickname.c_str(), nickname.length(), 0);
+
+    cout << "\nВы подключились как: " << nickname << endl;
+    cout << "Просто вводите сообщения и нажимайте Enter" << endl;
+    cout << "/private [ник] [сообщение] - личное сообщение" << endl;
+    cout << "/quit - выход" << endl;
+    cout << "==============================" << endl;
+
+    thread receiver(ReceiveMessages);
+
+    string message;
+    while (running) {
+        cout << "> ";
+        getline(cin, message);
+
+        if (message == "/quit") {
+            send(clientSocket, "/quit", 5, 0);
+            running = false;
+            break;
+        }
+
+        if (!message.empty()) {
+            send(clientSocket, message.c_str(), message.length(), 0);
+        }
+    }
+
+    receiver.join();
+    closesocket(clientSocket);
+    WSACleanup();
+
+    cout << "Нажмите Enter для выхода...";
+    cin.get();
+    return 0;
+}
