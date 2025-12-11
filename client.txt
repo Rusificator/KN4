@@ -1,0 +1,185 @@
+#include <iostream>
+#include <winsock2.h>
+#include <string>
+
+#pragma comment(lib, "ws2_32.lib")
+
+#define PORT 8888
+#define BUFFER_SIZE 1024
+#define MAX_CLIENTS 10
+
+using namespace std;
+
+int main() {
+    setlocale(LC_ALL, "rus");
+
+    // Инициализация Winsock
+    WSADATA wsa;
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+        cout << "Ошибка Winsock" << endl;
+        return 1;
+    }
+
+    // Создание сокета
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket == INVALID_SOCKET) {
+        cout << "Ошибка создания сокета" << endl;
+        return 1;
+    }
+
+    // Настройка адреса
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(PORT);
+
+    // Привязка
+    if (bind(serverSocket, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
+        cout << "Ошибка привязки" << endl;
+        return 1;
+    }
+
+    // Прослушивание
+    if (listen(serverSocket, MAX_CLIENTS) == SOCKET_ERROR) {
+        cout << "Ошибка прослушивания" << endl;
+        return 1;
+    }
+
+    cout << "Сервер чата запущен на порту " << PORT << endl;
+    cout << "Максимум клиентов: " << MAX_CLIENTS << endl;
+    cout << "==============================" << endl;
+
+    SOCKET clients[MAX_CLIENTS];
+    string nicknames[MAX_CLIENTS];
+    int clientCount = 0;
+
+    // Инициализация массива клиентов
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        clients[i] = INVALID_SOCKET;
+    }
+
+    // Основной цикл сервера
+    while (true) {
+        // Проверяем новые подключения
+        fd_set readSet;
+        FD_ZERO(&readSet);
+        FD_SET(serverSocket, &readSet);
+
+        // Добавляем всех клиентов в набор
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i] != INVALID_SOCKET) {
+                FD_SET(clients[i], &readSet);
+            }
+        }
+
+        // Проверка активности (без таймаута для простоты)
+        int activity = select(0, &readSet, NULL, NULL, NULL);
+
+        if (activity > 0) {
+            // Проверяем новое подключение
+            if (FD_ISSET(serverSocket, &readSet)) {
+                sockaddr_in clientAddr;
+                int clientSize = sizeof(clientAddr);
+                SOCKET newClient = accept(serverSocket, (sockaddr*)&clientAddr, &clientSize);
+
+                if (newClient != INVALID_SOCKET && clientCount < MAX_CLIENTS) {
+                    // Ищем свободное место для клиента
+                    for (int i = 0; i < MAX_CLIENTS; i++) {
+                        if (clients[i] == INVALID_SOCKET) {
+                            clients[i] = newClient;
+
+                            // Получаем ник клиента
+                            char buffer[BUFFER_SIZE];
+                            int bytes = recv(newClient, buffer, BUFFER_SIZE - 1, 0);
+                            if (bytes > 0) {
+                                buffer[bytes] = '\0';
+                                nicknames[i] = buffer;
+
+                                cout << nicknames[i] << " присоединился к чату!" << endl;
+
+                                // Отправляем приветствие
+                                string welcome = "Добро пожаловать, " + nicknames[i] + "!";
+                                send(newClient, welcome.c_str(), welcome.length(), 0);
+
+                                // Уведомляем всех
+                                string msg = nicknames[i] + " присоединился к чату!";
+                                for (int j = 0; j < MAX_CLIENTS; j++) {
+                                    if (clients[j] != INVALID_SOCKET && j != i) {
+                                        send(clients[j], msg.c_str(), msg.length(), 0);
+                                    }
+                                }
+                            }
+
+                            clientCount++;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Проверяем сообщения от существующих клиентов
+            for (int i = 0; i < MAX_CLIENTS; i++) {
+                if (clients[i] != INVALID_SOCKET && FD_ISSET(clients[i], &readSet)) {
+                    char buffer[BUFFER_SIZE];
+                    int bytes = recv(clients[i], buffer, BUFFER_SIZE - 1, 0);
+
+                    if (bytes <= 0) {
+                        // Клиент отключился
+                        cout << nicknames[i] << " покинул чат" << endl;
+
+                        // Уведомляем остальных
+                        string msg = nicknames[i] + " покинул чат";
+                        for (int j = 0; j < MAX_CLIENTS; j++) {
+                            if (clients[j] != INVALID_SOCKET && j != i) {
+                                send(clients[j], msg.c_str(), msg.length(), 0);
+                            }
+                        }
+
+                        closesocket(clients[i]);
+                        clients[i] = INVALID_SOCKET;
+                        nicknames[i] = "";
+                        clientCount--;
+                    }
+                    else {
+                        buffer[bytes] = '\0';
+                        string message = buffer;
+
+                        if (message == "/quit") {
+                            // Клиент вышел
+                            cout << nicknames[i] + " покинул чат" << endl;
+                            string msg = nicknames[i] + " покинул чат";
+
+                            for (int j = 0; j < MAX_CLIENTS; j++) {
+                                if (clients[j] != INVALID_SOCKET && j != i) {
+                                    send(clients[j], msg.c_str(), msg.length(), 0);
+                                }
+                            }
+
+                            closesocket(clients[i]);
+                            clients[i] = INVALID_SOCKET;
+                            nicknames[i] = "";
+                            clientCount--;
+                        }
+                        else {
+                            // Обычное сообщение
+                            string msg = nicknames[i] + ": " + message;
+                            cout << msg << endl;
+
+                            // Отправляем всем, кроме отправителя
+                            for (int j = 0; j < MAX_CLIENTS; j++) {
+                                if (clients[j] != INVALID_SOCKET && j != i) {
+                                    send(clients[j], msg.c_str(), msg.length(), 0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Очистка
+    closesocket(serverSocket);
+    WSACleanup();
+    return 0;
+}
