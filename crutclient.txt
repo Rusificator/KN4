@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 
+
 #pragma comment(lib, "ws2_32.lib")
 
 #define SERVER_IP "127.0.0.1"
@@ -36,7 +37,7 @@ void ReceiveMessages() {
 
 int main() {
     setlocale(LC_ALL, "rus");
-
+   
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         cout << "Ошибка Winsock" << endl;
